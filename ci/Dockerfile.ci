@@ -1,0 +1,21 @@
+# CI image: leakwatch + gitleaks (optional but recommended — far more secret rules).
+# Build outside the closed network (or with your mirrors), push to the internal registry.
+#   docker build -f ci/Dockerfile.ci -t registry.corp.internal/leakwatch-ci:0.2 .
+# Closed network without registry access: download the gitleaks release tarball separately
+# and COPY it in instead of the curl line.
+FROM python:3.12-slim
+
+ARG GITLEAKS_VERSION=8.28.0
+ARG PIP_INDEX_URL
+ENV PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1
+
+RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates curl \
+ && curl -sSL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
+    | tar -xz -C /usr/local/bin gitleaks \
+ && apt-get purge -y curl && apt-get autoremove -y && rm -rf /var/lib/apt/lists/* \
+ && git config --system --add safe.directory '*'
+
+WORKDIR /opt/leakwatch
+COPY pyproject.toml ./
+COPY leakwatch ./leakwatch
+RUN pip install .

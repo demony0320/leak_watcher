@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "leakwatch"
+version = "0.2.0"
+description = "Leak detection in two stages: CI (Bitbucket Pipelines) and scheduled runtime checks"
+requires-python = ">=3.11"
+dependencies = []          # core is stdlib-only
+
+[project.optional-dependencies]
+db = ["sqlalchemy>=2.0"]                   # + your driver: psycopg[binary], pymysql, pyodbc, oracledb, databricks-sql-connector
+
+[project.scripts]
+leakwatch = "leakwatch.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["leakwatch*"]

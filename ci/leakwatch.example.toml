@@ -1,0 +1,28 @@
+# Optional per-repository CI settings. Copy to the repo root as .leakwatch.toml.
+# Every key is optional; CLI flags override these.
+
+[ci]
+fail_on = "high"                 # block the PR on new findings at or above this severity
+detect = ["secret", "pii", "risky_file", "code"]
+exclude = ["docs/*", "*.snap", "third_party/*"]
+use_gitleaks = "auto"            # auto (if installed) | on (error if missing) | off
+# gitleaks_config = ".gitleaks.toml"
+baseline = ".leakwatch-baseline.json"
+max_file_kb = 1024
+disabled_rules = []              # e.g. ["code.debug_enabled"]
+
+# Team rules — add one whenever runtime finds a leak pattern that code review should have caught.
+[[ci.rules]]
+id = "internal-host-hardcoded"
+pattern = 'https?://[a-z0-9.-]+\.corp\.internal'
+severity = "low"
+category = "exposure"
+message = "Internal hostname hardcoded — move to configuration"
+globs = ["src/*"]
+
+[[ci.rules]]
+id = "loan-lookup-without-owner-check"
+pattern = 'def\s+get_loan_by_no\('
+severity = "high"
+category = "authz"
+message = "Loan lookups must go through LoanService.get_for_owner()"

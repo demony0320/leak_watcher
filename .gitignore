@@ -218,3 +218,11 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# LeakWatch generated state / local configs
+data/
+data-demo/
+demo/work/
+leakwatch-results/
+runtime.toml
+.leakwatch-baseline.json.bak

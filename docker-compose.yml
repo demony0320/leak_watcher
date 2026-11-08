@@ -1,0 +1,23 @@
+# Demo of the runtime stage: leakwatch + the deliberately leaky app.
+#   python demo/make_demo.py      # once, builds demo/work
+#   docker compose up --build
+# Report: ./data-demo/report.html
+services:
+  leaky-app:
+    image: python:3.12-slim
+    command: python /demo/leaky_app.py
+    environment:
+      DEMO_TOKEN: demo-user-token-1001
+    volumes:
+      - ./demo:/demo:ro
+
+  leakwatch:
+    build: .
+    depends_on: [leaky-app]
+    environment:
+      DEMO_TOKEN: demo-user-token-1001
+      LEAKWATCH_APP_HOST: leaky-app
+    volumes:
+      - ./runtime.demo.toml:/work/runtime.toml:ro
+      - ./demo:/work/demo
+      - ./data-demo:/work/data-demo

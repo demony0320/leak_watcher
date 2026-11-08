@@ -1,0 +1,50 @@
+# LeakWatch CI stage for Bitbucket Pipelines.
+# Copy into the target repository as bitbucket-pipelines.yml (or merge the steps into yours).
+#
+# Image: build ci/Dockerfile.ci once and push to your internal registry
+#   docker build -f ci/Dockerfile.ci -t registry.corp.internal/leakwatch-ci:0.2 .
+# Without a custom image, the `python:3.12-slim` variant at the bottom installs from your pip mirror.
+
+image: registry.corp.internal/leakwatch-ci:0.2
+
+definitions:
+  steps:
+    - step: &leakwatch-pr
+        name: LeakWatch (PR diff)
+        clone:
+          depth: full                    # needed for merge-base and the PR commit range
+        script:
+          # diff vs. the PR target branch (BITBUCKET_PR_DESTINATION_BRANCH is picked up automatically);
+          # posts a Code Insights report + line annotations on the PR, writes JUnit to test-results/
+          - leakwatch ci scan --out leakwatch-results
+        artifacts:
+          - leakwatch-results/**
+
+    - step: &leakwatch-full
+        name: LeakWatch (full + history)
+        clone:
+          depth: full
+        script:
+          - leakwatch ci scan --mode full --history --out leakwatch-results
+        artifacts:
+          - leakwatch-results/**         # findings.json → runtime [ingest].watch_dir
+
+pipelines:
+  pull-requests:
+    '**':
+      - step: *leakwatch-pr
+
+  branches:
+    main:
+      - step: *leakwatch-full
+
+  custom:                                # run manually, or attach a nightly schedule in Repository settings → Schedules
+    leakwatch-nightly:
+      - step: *leakwatch-full
+
+# --- Variant without a custom image -------------------------------------------------------
+# image: python:3.12-slim
+#   script:
+#     - apt-get update -qq && apt-get install -y -qq git >/dev/null
+#     - pip install -q --index-url "$PIP_INDEX_URL" leakwatch      # internal mirror / private index
+#     - leakwatch ci scan --out leakwatch-results

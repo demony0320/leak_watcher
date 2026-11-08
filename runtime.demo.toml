@@ -1,0 +1,43 @@
+# Demo runtime config — targets from `python demo/make_demo.py` + `python demo/leaky_app.py`
+
+[general]
+data_dir = "./data-demo"
+interval_minutes = 30
+
+[scope]
+allowed_hosts = ["127.0.0.1", "localhost", "leaky-app"]
+request_delay_sec = 0.02
+timeout_sec = 5
+
+# 1 + 3: exposure, unauthenticated data, IDOR, secrets/PII in responses
+[[http]]
+name = "demo-app"
+base_url = "http://${LEAKWATCH_APP_HOST:-127.0.0.1}:8088"
+token_env = "DEMO_TOKEN"
+auth_required = ["/api/me", "/api/loan-status?customerNo=200001"]
+idor = [{ path = "/api/customers?id={id}", own_id = 1001, neighbors = 3 }]
+
+# 2: known vulnerabilities / misconfigurations (needs the nuclei binary on PATH)
+[nuclei]
+enabled = true
+severity = ["critical", "high", "medium"]
+rate_limit = 20
+# templates = ["./nuclei-templates"]   # local copy of the templates repo (closed network)
+
+# 4: database storage
+[[db]]
+name = "app-db"
+url = "sqlite:///./demo/work/app.db"
+sample_rows = 100
+
+# CI results dropped here (pipeline artifact → this folder) are imported every cycle
+[ingest]
+watch_dir = "./data-demo/inbox"
+
+[alerts]
+console = true
+min_severity = "medium"
+jsonl = "./data-demo/alerts.jsonl"
+
+[triage]
+enabled = false

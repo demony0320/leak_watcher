@@ -1,0 +1,78 @@
+# LeakWatch runtime stage — copy to runtime.toml and edit.
+# Runs on a schedule against systems reachable over HTTPS from this machine (on-prem or cloud).
+# Secrets go in environment variables via *_env keys. ${VAR} / ${VAR:-default} are expanded.
+
+[general]
+data_dir = "./data"              # SQLite state, report.html, alerts.jsonl, triage_instructions.md
+interval_minutes = 30
+
+[scope]
+# Active requests are refused for any host not listed here (fnmatch patterns).
+allowed_hosts = ["*.corp.internal", "myapp.azurewebsites.net"]
+request_delay_sec = 0.2
+timeout_sec = 8
+
+# ---------------------------------------------------------------- 1 + 3  web apps / APIs
+[[http]]
+name = "internal-portal"
+base_url = "https://portal.corp.internal"
+token_env = "PORTAL_TEST_TOKEN"  # low-privilege TEST account
+verify_tls = true
+auth_required = ["/api/me", "/api/v1/loan/status?customerNo=200001"]     # must reject anonymous calls
+idor = [{ path = "/api/v1/customers/{id}", own_id = 100234, neighbors = 3 }]  # neighbours must be 403/404
+crawl_paths = ["/api/v1/config/public"]                                    # responses must not hold secrets/PII
+extra_paths = ["/retail-test", "/old-admin"]
+
+[[http]]
+name = "cloud-api"
+base_url = "https://myapp.azurewebsites.net"
+auth_required = ["/api/orders"]
+
+# ---------------------------------------------------------------- 2  known vulns / misconfig (nuclei)
+[nuclei]
+enabled = true
+binary = "nuclei"
+templates = ["./nuclei-templates"]           # local copy; refresh it and the next cycle rescans everything
+severity = ["critical", "high", "medium"]
+rate_limit = 50
+exclude_tags = ["dos", "fuzz", "intrusive"]
+timeout_minutes = 60
+# extra_targets = [{ name = "legacy-was", url = "https://was01.corp.internal:7002" }]
+
+# ---------------------------------------------------------------- 4  databases (read-only account!)
+[[db]]
+name = "core-db"
+url_env = "CORE_DB_URL"          # postgresql+psycopg://ro_user:***@db.corp.internal/core  (needs `pip install .[db]` + driver)
+sample_rows = 200
+# tables = ["users", "customers"]
+
+# ---------------------------------------------------------------- CI results
+[ingest]
+watch_dir = "./data/inbox"       # drop pipeline artifacts (findings.json) here; picked up every cycle
+
+# ---------------------------------------------------------------- optional: anonymous cloud storage
+# [[cloud_storage]]
+# name = "exports-blob"
+# provider = "azure"
+# url = "https://mystorage.blob.core.windows.net/exports"
+
+# ---------------------------------------------------------------- alerting
+[alerts]
+console = true
+min_severity = "medium"
+notify_resolved = true
+jsonl = "./data/alerts.jsonl"
+# webhook_url_env = "LEAKWATCH_WEBHOOK"
+# [alerts.smtp]
+# host = "smtp.corp.internal"
+# from = "leakwatch@corp.internal"
+# to = ["secops@corp.internal"]
+
+# ---------------------------------------------------------------- optional LLM triage
+[triage]
+enabled = false
+base_url = "http://llm.corp.internal:8000/v1"   # OpenAI-compatible (vLLM/Ollama/TGI)
+model = "Qwen/Qwen2.5-14B-Instruct"
+api_key_env = "LLM_API_KEY"
+# Azure OpenAI: base_url = "https://<res>.openai.azure.com", model = "<deployment>", azure_api_version = "2024-10-21"
+min_severity = "medium"
